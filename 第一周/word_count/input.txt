@@ -1,0 +1,4 @@
+Hello LLM!
+This is a simple sample text. This text is short, but good enough.
+Feel free to add more lines to test the word counter.
+
