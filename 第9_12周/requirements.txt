@@ -1,0 +1,10 @@
+gradio>=4.0.0
+langchain
+langchain-community
+langchain-huggingface
+dashscope
+faiss-cpu
+pypdf
+sentence-transformers
+# 解决字符编码和部分加载问题
+chardet

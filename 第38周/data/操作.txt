@@ -1,0 +1,105 @@
+# 第38周：FastAPI 封装模型 - 操作指南
+
+本周任务是将之前的 RAG 智能客服系统封装成标准的 RESTful API，方便前端或其他系统调用。
+
+## 1. 环境准备
+
+确保你已经安装了 Python 3.10+ 环境。
+
+在 `第38周` 目录下，我们已经准备了 `requirements.txt`。
+
+```bash
+cd f:\Desktop\个人资料\大模型学习项目\第38周
+pip install -r requirements.txt
+```
+
+`requirements.txt` 内容如下：
+```text
+fastapi
+uvicorn
+langchain
+langchain_community
+langchain_core
+faiss-cpu
+dashscope
+# 如果之前没有安装过，可能还需要 tiktoken 等，视具体报错而定
+```
+
+## 2. 代码实现
+
+我们将复用之前的 `rag_engine.py`，并新建 `app.py` 来创建 API。
+
+### 核心文件说明
+- `rag_engine.py`: 之前的 RAG 核心逻辑（已复制过来）。
+- `data/`: 知识库数据文件夹（已复制过来）。
+- `app.py`: FastAPI 服务入口。
+
+### `app.py` 代码
+
+```python
+import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from rag_engine import SmartCSBot
+
+# 初始化 FastAPI 应用
+app = FastAPI(title="RAG 智能客服 API", description="基于 FastAPI 和 LangChain 的 RAG 问答服务")
+
+# 初始化 RAG 机器人
+# 注意：这里需要确保 DASHSCOPE_API_KEY 环境变量已经设置
+if "DASHSCOPE_API_KEY" not in os.environ:
+    print("⚠️ 警告: 未检测到 DASHSCOPE_API_KEY 环境变量，请确保已配置！")
+
+# 实例化机器人，指定数据目录
+qa_bot = SmartCSBot(data_dir="./data")
+
+# 定义请求体模型
+class Query(BaseModel):
+    question: str
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to RAG API! Use POST /ask to chat."}
+
+@app.post("/ask")
+def ask(query: Query):
+    if not query.question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+    
+    # 调用 RAG 引擎的 chat 方法
+    answer = qa_bot.chat(query.question)
+    
+    return {"answer": answer}
+```
+
+## 3. 启动服务
+
+在终端中运行以下命令启动服务：
+
+```bash
+uvicorn app:app --reload --port 8000
+```
+
+- `app:app` 表示文件名为 `app.py`，实例名为 `app`。
+- `--reload` 表示代码变动时自动重启（开发模式）。
+- `--port 8000` 指定端口。
+
+## 4. 验证 API
+
+### 方法一：使用浏览器自带的 Swagger UI
+服务启动后，打开浏览器访问：[http://localhost:8000/docs](http://localhost:8000/docs)
+
+你可以在页面上直接测试 `/ask` 接口：
+1. 点击 `/ask` -> `Try it out`。
+2. 在 Request body 中输入 JSON：
+   ```json
+   {
+     "question": "你们的退货政策是什么？"
+   }
+   ```
+3. 点击 `Execute` 查看 Response。
+
+### 方法二：使用 PowerShell 测试
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:8000/ask" -ContentType "application/json" -Body '{"question": "你好"}'
+```

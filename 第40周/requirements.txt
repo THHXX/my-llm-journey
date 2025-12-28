@@ -1,0 +1,7 @@
+modelscope
+torch
+transformers
+autoawq; sys_platform != 'win32'
+vllm; sys_platform != 'win32'
+gguf
+protobuf

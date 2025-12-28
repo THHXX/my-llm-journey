@@ -1,0 +1,5 @@
+dashscope
+langchain
+langchain-community
+faiss-cpu
+gradio>=4.0.0

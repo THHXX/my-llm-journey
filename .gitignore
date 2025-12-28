@@ -1,0 +1,33 @@
+# Python 环境与缓存
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# IDE 与 编辑器配置
+.vscode/
+.idea/
+.trae/
+.DS_Store
+
+# 运行时临时文件
+*.log
+.gradio/
+
+# 编译产物与二进制工具 (建议忽略)
+*.exe
+*.dll
+*.so
+*.zip
+*.rar
+
+# 大文件与数据库 (GitHub 限制单文件 100MB)
+*.gguf
+*.bin
+**/models/
+**/chroma_db/
+**/volumes/
+**/milvus/
+**/data/*.pdf
+**/data/*.csv
