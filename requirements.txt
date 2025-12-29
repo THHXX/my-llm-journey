@@ -1,0 +1,12 @@
+pdfplumber
+pandas
+openpyxl
+chromadb
+sentence-transformers
+langchain-text-splitters
+modelscope
+requests
+psutil
+streamlit
+dashscope
+plotly
