@@ -9,3 +9,4 @@ requests
 psutil
 streamlit
 dashscope
+plotly
