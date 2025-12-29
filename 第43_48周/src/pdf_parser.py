@@ -2,11 +2,11 @@ import pdfplumber
 import pandas as pd
 import os
 
-def extract_text_from_pdf(pdf_path):
+def extract_text_with_tables(pdf_path):
     """
-    提取 PDF 中的所有文本
+    智能提取文本：将表格转换为 Markdown 格式嵌入文本中，保持上下文连贯
     :param pdf_path: PDF 文件路径
-    :return: 提取的文本字符串
+    :return: 包含 Markdown 表格的完整文本
     """
     if not os.path.exists(pdf_path):
         print(f"错误: 文件不存在 {pdf_path}")
@@ -15,15 +15,89 @@ def extract_text_from_pdf(pdf_path):
     full_text = ""
     try:
         with pdfplumber.open(pdf_path) as pdf:
-            print(f"正在解析 {pdf_path}，共 {len(pdf.pages)} 页...")
+            print(f"🔍 正在智能解析 {pdf_path} (表格转Markdown)...")
             for i, page in enumerate(pdf.pages):
-                text = page.extract_text()
-                if text:
-                    full_text += f"\n--- Page {i+1} ---\n{text}"
+                # 1. 提取纯文本
+                text = page.extract_text() or ""
+                
+                # 2. 提取表格并转换为 Markdown
+                tables = page.extract_tables()
+                table_mds = []
+                if tables:
+                    for table in tables:
+                        # 过滤无效表格 (行数太少或空内容)
+                        if not table or len(table) < 2:
+                            continue
+                            
+                        # 清洗 None 值
+                        clean_table = [[str(cell).replace('\n', ' ') if cell else "" for cell in row] for row in table]
+                        
+                        try:
+                            # 转换为 DataFrame 再转 Markdown
+                            df = pd.DataFrame(clean_table[1:], columns=clean_table[0])
+                            # 移除空列
+                            df = df.dropna(axis=1, how='all')
+                            if not df.empty:
+                                md = df.to_markdown(index=False)
+                                table_mds.append(f"\n\n[Table from Page {i+1}]\n{md}\n\n")
+                        except Exception:
+                            continue
+
+                # 3. 拼接策略：简单将表格追加在每页文本之后
+                # (更高级的策略是根据坐标插入回原文位置，但实现较复杂)
+                page_content = text + "".join(table_mds)
+                full_text += f"\n--- Page {i+1} ---\n{page_content}"
+                
         return full_text
     except Exception as e:
         print(f"解析出错: {e}")
         return ""
+
+# 保留旧接口兼容性
+extract_text_from_pdf = extract_text_with_tables
+
+def extract_text_with_page_infos(pdf_path):
+    """
+    【极致优化版】提取文本并保留页码信息
+    :return: List[Dict] -> [{"page": 1, "text": "..."}]
+    """
+    if not os.path.exists(pdf_path):
+        return []
+    
+    pages_data = []
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            print(f"🔍 [Pro] 正在深度解析 {pdf_path} (带页码追踪)...")
+            for i, page in enumerate(pdf.pages):
+                page_num = i + 1
+                text = page.extract_text() or ""
+                
+                # 表格处理逻辑 (同上)
+                tables = page.extract_tables()
+                table_mds = []
+                if tables:
+                    for table in tables:
+                        if not table or len(table) < 2: continue
+                        clean_table = [[str(cell).replace('\n', ' ') if cell else "" for cell in row] for row in table]
+                        try:
+                            df = pd.DataFrame(clean_table[1:], columns=clean_table[0])
+                            df = df.dropna(axis=1, how='all')
+                            if not df.empty:
+                                md = df.to_markdown(index=False)
+                                table_mds.append(f"\n\n[Table from Page {page_num}]\n{md}\n\n")
+                        except: pass
+
+                full_page_text = text + "".join(table_mds)
+                # 标记页码边界，方便后续 debug，但主要依靠返回结构
+                pages_data.append({
+                    "page": page_num,
+                    "text": full_page_text
+                })
+                
+        return pages_data
+    except Exception as e:
+        print(f"解析出错: {e}")
+        return []
 
 def extract_tables_from_pdf(pdf_path):
     """

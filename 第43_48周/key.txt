@@ -1,0 +1,3 @@
+请在此文件中填入您的阿里云 DashScope API Key (例如 sk-xxxxxxxx)
+不需要引号，直接粘贴即可。
+获取地址: https://bailian.console.aliyun.com/?apiKey=1

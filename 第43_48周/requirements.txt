@@ -8,3 +8,4 @@ modelscope
 requests
 psutil
 streamlit
+dashscope

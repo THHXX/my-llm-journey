@@ -83,10 +83,11 @@ class LocalLLM:
         
         raise RuntimeError("LLM 服务启动超时")
 
-    def chat(self, messages, temperature=0.7):
+    def chat(self, messages, temperature=0.7, **kwargs):
         """
         发送聊天请求
         messages: [{"role": "user", "content": "..."}]
+        kwargs: 其他 OpenAI API 参数 (如 stop, max_tokens 等)
         """
         payload = {
             "messages": messages,
@@ -96,6 +97,9 @@ class LocalLLM:
             "presence_penalty": 1.1,
             "top_p": 0.95
         }
+        
+        # 合并额外的参数
+        payload.update(kwargs)
         
         # 重试机制
         max_retries = 5
@@ -124,6 +128,76 @@ class LocalLLM:
         if self.process:
             self.process.terminate()
             self.process = None
+
+class QwenCloudLLM:
+    """
+    阿里云 Qwen (通义千问) 云端 API 接口
+    需要安装 dashscope: pip install dashscope
+    """
+    def __init__(self):
+        try:
+            import dashscope
+        except ImportError:
+            raise ImportError("请先安装 dashscope: pip install dashscope")
+        
+        # 1. 尝试从环境变量获取
+        self.api_key = os.environ.get("DASHSCOPE_API_KEY")
+        
+        # 2. 如果没有，尝试从 key.txt 读取 (位于项目根目录)
+        if not self.api_key:
+            key_path = os.path.join(PROJECT_ROOT, "key.txt")
+            if os.path.exists(key_path):
+                try:
+                    with open(key_path, "r", encoding='utf-8') as f:
+                        self.api_key = f.read().strip()
+                except Exception as e:
+                    print(f"读取 key.txt 失败: {e}")
+
+        if not self.api_key:
+             # 这是一个友好的提示，告诉用户去哪里搞 Key
+             print("\n⚠️  未找到阿里云 API Key！")
+             print("请创建一个名为 'key.txt' 的文件在 '第43_48周' 目录下，并将你的 API Key 粘贴进去。")
+             print("或者设置环境变量 DASHSCOPE_API_KEY")
+             raise ValueError("API Key missing")
+        
+        dashscope.api_key = self.api_key
+
+    def chat(self, messages, temperature=0.7, **kwargs):
+        import dashscope
+        from http import HTTPStatus
+        
+        # 移除 LocalLLM 特有的不支持参数，防止报错
+        if 'frequency_penalty' in kwargs: del kwargs['frequency_penalty']
+        if 'presence_penalty' in kwargs: del kwargs['presence_penalty']
+        
+        # 使用 qwen-max (通义千问-Max)，能力最强，适合复杂分析
+        # 也可以换成 qwen-plus (性价比高)
+        model_name = kwargs.pop('model', 'qwen-max') 
+
+        try:
+            response = dashscope.Generation.call(
+                model=model_name,
+                messages=messages,
+                result_format='message',
+                temperature=temperature,
+                **kwargs
+            )
+            
+            if response.status_code == HTTPStatus.OK:
+                # 模拟 OpenAI 格式返回，保持接口一致性
+                return {
+                    "choices": [{
+                        "message": {
+                            "content": response.output.choices[0].message.content
+                        }
+                    }]
+                }
+            else:
+                print(f"\n❌ Cloud API Error: Code {response.code} - {response.message}")
+                return None
+        except Exception as e:
+            print(f"\n❌ Cloud API Exception: {e}")
+            return None
 
 if __name__ == "__main__":
     # 测试代码
