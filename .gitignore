@@ -29,5 +29,4 @@ venv/
 **/chroma_db/
 **/volumes/
 **/milvus/
-**/data/*.pdf
 **/data/*.csv
