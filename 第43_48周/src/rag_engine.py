@@ -11,11 +11,43 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "data")
 CHROMA_DB_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "chroma_db")
 
+def get_embedding_function():
+    """
+    获取 Embedding 函数 (单例模式/缓存友好)
+    """
+    # 【重要】根据操作系统设置缓存目录
+    import platform
+    if platform.system() == "Windows":
+        os.environ['MODELSCOPE_CACHE'] = 'D:\\ModelScope_Cache'
+    else:
+        # Linux / Streamlit Cloud 使用默认路径
+        pass
+    
+    # 🌟 BGE-M3 模型配置
+    model_id = "Xorbits/bge-m3" 
+    model_name_or_path = "BAAI/bge-m3"
+
+    try:
+        from modelscope import snapshot_download
+        print("   🚀 [Init] 正在检查/下载 BGE-M3 模型...")
+        # snapshot_download 会自动处理缓存，如果已存在不会重复下载
+        model_dir = snapshot_download(model_id, revision='master')
+        model_name_or_path = model_dir
+    except Exception as e:
+        print(f"   ⚠️ ModelScope 初始化失败，尝试直接加载: {e}")
+
+    print(f"   🔄 加载 Embedding 模型: {model_name_or_path}")
+    emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=model_name_or_path
+    )
+    return emb_fn
+
 def build_vector_db(pdf_filename="tesla_2023_10k.pdf", collection_name="financial_reports"):
     """
     构建向量数据库：读取PDF -> 切分 -> 嵌入 -> 存入 ChromaDB
     """
     pdf_path = os.path.join(DATA_DIR, pdf_filename)
+
     if not os.path.exists(pdf_path):
         print(f"错误: 找不到文件 {pdf_path}")
         return None
@@ -65,31 +97,8 @@ def build_vector_db(pdf_filename="tesla_2023_10k.pdf", collection_name="financia
     print(f"3. 初始化 ChromaDB (持久化路径: {CHROMA_DB_DIR})...")
     client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
     
-    # -----------------------------------------------------------
-    # 使用 ModelScope (阿里云) 下载模型，解决国内网络问题
-    # -----------------------------------------------------------
-    # 【重要】设置缓存目录到 D 盘，避免占用 C 盘空间
-    os.environ['MODELSCOPE_CACHE'] = 'D:\\ModelScope_Cache'
-    
-    # 🌟 升级为 BGE-M3 (中文/多语言检索最强)
-    # 虽然模型稍大 (约 2GB)，但效果质变，支持中英混合检索
-    model_id = "Xorbits/bge-m3" 
-    model_name_or_path = "BAAI/bge-m3" # fallback name
-
-    try:
-        from modelscope import snapshot_download
-        print("   🚀 正在使用 ModelScope (阿里云) 下载 BGE-M3 模型...")
-        print(f"   📂 缓存目录: {os.environ['MODELSCOPE_CACHE']}")
-        model_dir = snapshot_download(model_id, revision='master')
-        model_name_or_path = model_dir
-        print(f"   ✅ 模型已下载至: {model_dir}")
-    except Exception as e:
-        print(f"   ⚠️ ModelScope 下载失败，尝试直接加载 ({e})")
-
-    # 使用 sentence-transformers 加载本地模型
-    emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=model_name_or_path
-    )
+    # 获取 Embedding 函数
+    emb_fn = get_embedding_function()
 
     # 获取或创建集合 (Collection)
     # 如果已存在，先删除重建 (为了测试方便，实际生产可以增量更新)
@@ -128,7 +137,7 @@ def build_vector_db(pdf_filename="tesla_2023_10k.pdf", collection_name="financia
     print("✅ 向量数据库构建完成！")
     return collection
 
-def query_vector_db(query_text, collection_name="financial_reports", n_results=3):
+def query_vector_db(query_text, collection_name="financial_reports", n_results=3, embedding_function=None):
     """
     查询向量数据库
     """
@@ -136,24 +145,12 @@ def query_vector_db(query_text, collection_name="financial_reports", n_results=3
     
     client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
     
-    # -----------------------------------------------------------
-    # 同样使用 ModelScope 路径加载模型
-    # -----------------------------------------------------------
-    os.environ['MODELSCOPE_CACHE'] = 'D:\\ModelScope_Cache'
-    model_id = "Xorbits/bge-m3" 
-    model_name_or_path = "BAAI/bge-m3"
-
-    try:
-        from modelscope import snapshot_download
-        # 此时应该已经缓存了，不会重复下载
-        model_dir = snapshot_download(model_id, revision='master')
-        model_name_or_path = model_dir
-    except:
-        pass
-
-    emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=model_name_or_path
-    )
+    # 如果外部传入了 embedding_function，直接使用 (性能优化)
+    # 否则重新初始化 (较慢)
+    if embedding_function is None:
+        emb_fn = get_embedding_function()
+    else:
+        emb_fn = embedding_function
     
     try:
         collection = client.get_collection(name=collection_name, embedding_function=emb_fn)
@@ -176,7 +173,7 @@ def query_vector_db(query_text, collection_name="financial_reports", n_results=3
     
     return results['documents'][0], results['metadatas'][0]
 
-def rag_chat(query_text, collection_name="financial_reports", llm_type="local"):
+def rag_chat(query_text, collection_name="financial_reports", llm_type="local", embedding_function=None):
     """
     RAG 对话：检索 -> 生成
     :param llm_type: 'local' (本地LLM) 或 'cloud' (阿里云Qwen)
@@ -186,7 +183,7 @@ def rag_chat(query_text, collection_name="financial_reports", llm_type="local"):
     # Local 模型上下文有限，保持较少的检索数量
     target_n_results = 10 if llm_type == "cloud" else 3
     
-    retrieved_docs, metadatas = query_vector_db(query_text, collection_name, n_results=target_n_results)
+    retrieved_docs, metadatas = query_vector_db(query_text, collection_name, n_results=target_n_results, embedding_function=embedding_function)
     
     if not retrieved_docs:
         print("未找到相关文档，无法回答。")

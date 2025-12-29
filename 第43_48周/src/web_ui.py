@@ -10,7 +10,19 @@ import plotly.express as px
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-from rag_engine import rag_chat
+from rag_engine import rag_chat, get_embedding_function
+
+# -----------------------------------------------------------------------------
+# 🚀 性能优化：缓存 Embedding 模型
+# -----------------------------------------------------------------------------
+# st.cache_resource 专门用于缓存全局资源 (如数据库连接、ML模型)
+# 这样，模型只需加载一次，后续所有用户请求都可以复用，极大提升响应速度！
+@st.cache_resource
+def load_cached_embedding_function():
+    return get_embedding_function()
+
+# 预加载模型 (应用启动时执行一次)
+embedding_function = load_cached_embedding_function()
 
 def render_chart_from_response(response_text):
     """
@@ -133,7 +145,13 @@ if prompt := st.chat_input("请输入您的问题 (例如: Tesla 2023年的总�
         with st.spinner("🔍 正在检索财报并思考中..."):
             try:
                 # 调用 RAG 引擎
-                response = rag_chat(prompt, collection_name=collection_name, llm_type=llm_type)
+                # 传入缓存的 embedding_function，避免重复加载模型
+                response = rag_chat(
+                    query_text=prompt,
+                    collection_name=collection_name,
+                    llm_type=llm_type,
+                    embedding_function=embedding_function
+                )
                 
                 # 显示回答
                 st.markdown(response)
