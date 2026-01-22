@@ -8,5 +8,6 @@ modelscope
 requests
 psutil
 streamlit
+altair<5
 dashscope
 plotly
