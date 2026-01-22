@@ -85,12 +85,29 @@ with st.sidebar:
         help="ChromaDB 中的集合名称"
     )
 
-    # LLM 选择
-    llm_option = st.radio(
-        "🤖 模型选择",
-        ("Local (本地 Qwen1.5-0.5B)", "Cloud (阿里云 Qwen-Max)"),
-        help="本地模式完全离线；云端模式需要 API Key，能力更强。"
-    )
+    # --- LLM 选择 (环境感知) ---
+    # 检查是否在 Streamlit Cloud 上运行 (通过检查环境变量)
+    # Streamlit Cloud 会设置 STREAMLIT_SHARING_MODE = "true"
+    IS_ON_STREAMLIT_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") == "true"
+
+    if IS_ON_STREAMLIT_CLOUD:
+        # 在云端，强制使用 Cloud 模式并禁用选项
+        st.info("☁️ 云端环境，仅支持在线模型。")
+        llm_option = "Cloud (阿里云 Qwen-Max)"
+        st.radio(
+            "🤖 模型选择",
+            (llm_option,),
+            index=0,
+            disabled=True,
+            help="云端部署环境不支持本地模型。"
+        )
+    else:
+        # 在本地，提供两种选择
+        llm_option = st.radio(
+            "🤖 模型选择",
+            ("Local (本地 Qwen1.5-0.5B)", "Cloud (阿里云 Qwen-Max)"),
+            help="本地模式完全离线；云端模式需要 API Key，能力更强。"
+        )
     
     llm_type = "local" if "Local" in llm_option else "cloud"
 
